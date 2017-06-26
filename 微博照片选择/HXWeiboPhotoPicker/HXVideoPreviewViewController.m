@@ -141,7 +141,7 @@
 {
     if (!_playBtn) {
         _playBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-        [_playBtn setImage:[UIImage imageNamed:@"multimedia_videocard_play@2x.png"] forState:UIControlStateNormal];
+        [_playBtn setImage:[HXPhotoTools hx_imageNamed:@"multimedia_videocard_play@2x.png"] forState:UIControlStateNormal];
         [_playBtn setImage:[[UIImage alloc] init] forState:UIControlStateSelected];
         [_playBtn addTarget:self action:@selector(didPlayBtnClick:) forControlEvents:UIControlEventTouchUpInside];
         _playBtn.selected = YES;
@@ -154,8 +154,8 @@
     if (!_selectedBtn) {
         CGFloat width = self.view.frame.size.width;
         _selectedBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-        [_selectedBtn setImage:[UIImage imageNamed:@"compose_guide_check_box_default@2x.png"] forState:UIControlStateNormal];
-        [_selectedBtn setImage:[UIImage imageNamed:@"compose_guide_check_box_right@2x.png"] forState:UIControlStateSelected];
+        [_selectedBtn setImage:[HXPhotoTools hx_imageNamed:@"compose_guide_check_box_default@2x.png"] forState:UIControlStateNormal];
+        [_selectedBtn setImage:[HXPhotoTools hx_imageNamed:@"compose_guide_check_box_right@2x.png"] forState:UIControlStateSelected];
         CGFloat selectedBtnW = _selectedBtn.currentImage.size.width;
         CGFloat selectedBtnH = _selectedBtn.currentImage.size.height;
         _selectedBtn.frame = CGRectMake(width - 30 - selectedBtnW, 84, selectedBtnW, selectedBtnH);
@@ -211,6 +211,10 @@
                 return;
             }
         }
+        if (model.type != HXPhotoModelMediaTypeCameraVideo && model.type != HXPhotoModelMediaTypeCameraPhoto) {
+            model.thumbPhoto = self.coverImage;
+            model.previewPhoto = self.coverImage;
+        }
         if (model.type == HXPhotoModelMediaTypePhoto || model.type == HXPhotoModelMediaTypePhotoGif) {
             [self.manager.selectedPhotos addObject:model];
         }else if (model.type == HXPhotoModelMediaTypeVideo) {
@@ -230,6 +234,10 @@
         anim.values = @[@(1.2),@(0.8),@(1.1),@(0.9),@(1.0)];
         [button.layer addAnimation:anim forKey:@""];
     }else {
+        if (model.type != HXPhotoModelMediaTypeCameraVideo && model.type != HXPhotoModelMediaTypeCameraPhoto) {
+            model.thumbPhoto = nil;
+            model.previewPhoto = nil;
+        }
         int i = 0;
         for (HXPhotoModel *subModel in self.manager.selectedList) {
             if ([subModel.asset.localIdentifier isEqualToString:model.asset.localIdentifier]) {
@@ -332,10 +340,16 @@
             max = YES;
         }
     }
-    if (!self.selectedBtn.selected && !max) {
-        self.model.selected = YES;
-        [self.manager.selectedList addObject:self.model];
-        [self.manager.selectedVideos addObject:self.model];
+    if (!self.isPreview) {
+        if (self.manager.selectedList.count == 0) {
+            if (!self.selectedBtn.selected && !max) {
+                self.model.thumbPhoto = self.coverImage;
+                self.model.previewPhoto = self.coverImage;
+                self.model.selected = YES;
+                [self.manager.selectedList addObject:self.model];
+                [self.manager.selectedVideos addObject:self.model];
+            }
+        }
     }
     if ([self.delegate respondsToSelector:@selector(previewVideoDidNextClick)]) {
         [self.delegate previewVideoDidNextClick];

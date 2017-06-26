@@ -8,7 +8,9 @@
 
 #import "HXPhotoSubViewCell.h"
 #import "HXPhotoModel.h"
-@interface HXPhotoSubViewCell ()
+#import "HXCircleProgressView.h"
+#import "HXPhotoTools.h"
+@interface HXPhotoSubViewCell ()<UIAlertViewDelegate>
 @property (weak, nonatomic) UIImageView *imageView;
 @property (weak, nonatomic) UIButton *deleteBtn;
 @property (weak, nonatomic) UIView *bottomView;
@@ -16,6 +18,7 @@
 @property (weak, nonatomic) UILabel *videoTime;
 @property (weak, nonatomic) UIImageView *gifIcon;
 @property (weak, nonatomic) UIImageView *liveIcon;
+@property (strong, nonatomic) HXCircleProgressView *progressView;
 @end
 
 @implementation HXPhotoSubViewCell
@@ -38,12 +41,12 @@
     self.imageView = imageView;
     
     UIButton *deleteBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-    [deleteBtn setImage:[UIImage imageNamed:@"compose_delete@2x.png"] forState:UIControlStateNormal];
+    [deleteBtn setImage:[HXPhotoTools hx_imageNamed:@"compose_delete@2x.png"] forState:UIControlStateNormal];
     [deleteBtn addTarget:self action:@selector(didDeleteClick) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:deleteBtn];
     self.deleteBtn = deleteBtn;
     
-    UIImageView *liveIcon = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"compose_live_photo_open_only_icon@2x.png"]];
+    UIImageView *liveIcon = [[UIImageView alloc] initWithImage:[HXPhotoTools hx_imageNamed:@"compose_live_photo_open_only_icon@2x.png"]];
     liveIcon.frame = CGRectMake(5, 5, liveIcon.image.size.width, liveIcon.image.size.height);
     [self.contentView addSubview:liveIcon];
     self.liveIcon = liveIcon;
@@ -54,7 +57,7 @@
     [self.contentView addSubview:bottomView];
     self.bottomView = bottomView;
     
-    UIImageView *videoIcon = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"VideoSendIcon@2x.png"]];
+    UIImageView *videoIcon = [[UIImageView alloc] initWithImage:[HXPhotoTools hx_imageNamed:@"VideoSendIcon@2x.png"]];
     [bottomView addSubview:videoIcon];
     self.videoIcon = videoIcon;
     
@@ -65,16 +68,64 @@
     [bottomView addSubview:videoTime];
     self.videoTime = videoTime;
     
-    UIImageView *gifIcon = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"timeline_image_gif@2x.png"]];
+    UIImageView *gifIcon = [[UIImageView alloc] initWithImage:[HXPhotoTools hx_imageNamed:@"timeline_image_gif@2x.png"]];
     [self.contentView addSubview:gifIcon];
     self.gifIcon = gifIcon;
+    
+    self.progressView = [[HXCircleProgressView alloc] init];
+    self.progressView.hidden = YES;
+    [self.contentView addSubview:self.progressView];
 }
 
 - (void)didDeleteClick
 {
+    if (self.model.networkPhotoUrl.length > 0) {
+        if (self.showDeleteNetworkPhotoAlert) {
+            UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"提示" message:@"是否删除此照片" delegate:self cancelButtonTitle:@"取消" otherButtonTitles:@"确定", nil];
+            [alert show];
+            return;
+        }
+    }
     if ([self.delegate respondsToSelector:@selector(cellDidDeleteClcik:)]) {
         [self.delegate cellDidDeleteClcik:self];
     }
+}
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex {
+    if (buttonIndex == 1) {
+        if ([self.delegate respondsToSelector:@selector(cellDidDeleteClcik:)]) {
+            [self.delegate cellDidDeleteClcik:self];
+        }
+    }
+}
+
+- (void)againDownload {
+    self.model.downloadError = NO;
+    self.model.downloadComplete = NO;
+    [self.imageView sd_setImageWithURL:[NSURL URLWithString:self.model.networkPhotoUrl] placeholderImage:self.model.thumbPhoto options:SDWebImageCacheMemoryOnly progress:^(NSInteger receivedSize, NSInteger expectedSize, NSURL * _Nullable targetURL) {
+        self.model.receivedSize = receivedSize;
+        self.model.expectedSize = expectedSize;
+        CGFloat progress = (CGFloat)receivedSize / expectedSize;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.progressView.progress = progress;
+        });
+    } completed:^(UIImage * _Nullable image, NSError * _Nullable error, SDImageCacheType cacheType, NSURL * _Nullable imageURL) {
+        if (error != nil) {
+            self.model.downloadError = YES;
+            self.model.downloadComplete = YES;
+            [self.progressView showError];
+        }else {
+            if (image) {
+                self.progressView.progress = 1;
+                self.progressView.hidden = YES;
+                self.imageView.image = image;
+                self.model.imageSize = image.size;
+                self.model.thumbPhoto = image;
+                self.model.previewPhoto = image;
+                self.userInteractionEnabled = YES;
+                self.model.downloadComplete = YES;
+            }
+        }
+    }];
 }
 
 - (void)setModel:(HXPhotoModel *)model
@@ -94,7 +145,39 @@
     }else {
         self.deleteBtn.hidden = NO;
     }
-    
+    if (model.networkPhotoUrl.length > 0) {
+//        if ([[model.networkPhotoUrl substringFromIndex:model.networkPhotoUrl.length - 3] isEqualToString:@"gif"]) {
+//            self.gifIcon.hidden = NO;
+//        }
+        self.progressView.hidden = model.downloadComplete;
+        [self.imageView sd_setImageWithURL:[NSURL URLWithString:model.networkPhotoUrl] placeholderImage:model.thumbPhoto options:SDWebImageCacheMemoryOnly progress:^(NSInteger receivedSize, NSInteger expectedSize, NSURL * _Nullable targetURL) {
+            model.receivedSize = receivedSize;
+            model.expectedSize = expectedSize;
+            CGFloat progress = (CGFloat)receivedSize / expectedSize;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                self.progressView.progress = progress;
+            });
+        } completed:^(UIImage * _Nullable image, NSError * _Nullable error, SDImageCacheType cacheType, NSURL * _Nullable imageURL) {
+            if (error != nil) {
+                model.downloadError = YES;
+                model.downloadComplete = YES;
+                [self.progressView showError];
+            }else {
+                if (image) {
+                    self.progressView.progress = 1;
+                    self.progressView.hidden = YES;
+//                    self.imageView.image = image;
+                    model.imageSize = image.size;
+                    model.thumbPhoto = image;
+                    model.previewPhoto = image;
+                    self.userInteractionEnabled = YES;
+                    model.downloadComplete = YES;
+                }
+            }
+        }];
+    }else {
+        self.progressView.hidden = YES;
+    }
     if ((model.type == HXPhotoModelMediaTypePhoto || model.type == HXPhotoModelMediaTypePhotoGif) || (model.type == HXPhotoModelMediaTypeCameraPhoto || model.type == HXPhotoModelMediaTypeLivePhoto)) {
         if (model.type == HXPhotoModelMediaTypePhotoGif) {
             self.gifIcon.hidden = NO;
@@ -126,6 +209,9 @@
     self.videoTime.frame = CGRectMake(CGRectGetMaxX(self.videoIcon.frame), 0, width - CGRectGetMaxX(self.videoIcon.frame) - 5, 25);
     
     self.gifIcon.frame = CGRectMake(width - self.gifIcon.image.size.width, height - self.gifIcon.image.size.height, self.gifIcon.image.size.width, self.gifIcon.image.size.height);
+    
+//    self.progressView.frame = CGRectMake(0, 0, 60, 60);
+    self.progressView.center = CGPointMake(width / 2, height / 2);
 }
 
 @end

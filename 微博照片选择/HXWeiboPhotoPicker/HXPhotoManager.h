@@ -23,33 +23,36 @@ typedef enum : NSUInteger {
 } HXPhotoManagerSelectedType;
 
 @interface HXPhotoManager : NSObject
-//------// 当要删除的已选中的图片或者视频的时候需要在对应的end数组里面删除
-// 例如: 如果删除的是通过相机拍的照片需要在 endCameraList 和 endCameraPhotos 数组删除对应的图片模型
-@property (strong, nonatomic) NSMutableArray *selectedList;
-@property (strong, nonatomic) NSMutableArray *selectedPhotos;
-@property (strong, nonatomic) NSMutableArray *selectedVideos;
-@property (strong, nonatomic) NSMutableArray *cameraList;
-@property (strong, nonatomic) NSMutableArray *cameraPhotos;
-@property (strong, nonatomic) NSMutableArray *cameraVideos;
-@property (strong, nonatomic) NSMutableArray *endCameraList;
-@property (strong, nonatomic) NSMutableArray *endCameraPhotos;
-@property (strong, nonatomic) NSMutableArray *endCameraVideos;
-@property (strong, nonatomic) NSMutableArray *selectedCameraList;
-@property (strong, nonatomic) NSMutableArray *selectedCameraPhotos;
-@property (strong, nonatomic) NSMutableArray *selectedCameraVideos;
-@property (strong, nonatomic) NSMutableArray *endSelectedCameraList;
-@property (strong, nonatomic) NSMutableArray *endSelectedCameraPhotos;
-@property (strong, nonatomic) NSMutableArray *endSelectedCameraVideos;
-@property (strong, nonatomic) NSMutableArray *endSelectedList;
-@property (strong, nonatomic) NSMutableArray *endSelectedPhotos;
-@property (strong, nonatomic) NSMutableArray *endSelectedVideos;
-//------//
-@property (assign, nonatomic) HXPhotoManagerSelectedType type;
-@property (assign, nonatomic) BOOL isOriginal;
-@property (assign, nonatomic) BOOL endIsOriginal;
-@property (copy, nonatomic) NSString *photosTotalBtyes;
-@property (copy, nonatomic) NSString *endPhotosTotalBtyes;
 
+/**  
+ 上次选择照片模型的数组
+ */
+//@property (strong, nonatomic) NSMutableArray *lastSelectedList;
+
+/**
+ 是否为单选模式 默认 NO
+ */
+//@property (assign, nonatomic) BOOL singleSelected;
+
+/**
+ 是否开启3DTouch预览功能 默认打开    -- 暂时关闭此功能
+ */
+@property (assign, nonatomic) BOOL open3DTouchPreview;
+
+/**
+ 显示全屏相机 //  默认 NO
+ */
+@property (assign, nonatomic) BOOL showFullScreenCamera;
+
+/**
+ 删除网络图片时是否显示Alert // 默认显示
+ */
+@property (assign, nonatomic) BOOL showDeleteNetworkPhotoAlert;
+
+/**
+ 网络图片地址数组
+ */
+@property (strong, nonatomic) NSMutableArray *networkPhotoUrls;
 
 /**
  是否把相机功能放在外面 默认 NO   使用 HXPhotoView 时有用
@@ -82,7 +85,7 @@ typedef enum : NSUInteger {
 @property (assign, nonatomic) BOOL goCamera;
 
 /**
- 最大选择数 默认10 - 必填
+ 最大选择数 等于 图片最大数 + 视频最大数 默认10 - 必填
  */
 @property (assign, nonatomic) NSInteger maxNum;
 
@@ -105,6 +108,36 @@ typedef enum : NSUInteger {
  相册列表每行多少个照片 默认4个
  */
 @property (assign, nonatomic) NSInteger rowCount;
+
+
+
+//------// 当要删除的已选中的图片或者视频的时候需要在对应的end数组里面删除
+// 例如: 如果删除的是通过相机拍的照片需要在 endCameraList 和 endCameraPhotos 数组删除对应的图片模型
+@property (strong, nonatomic) NSMutableArray *selectedList;
+@property (strong, nonatomic) NSMutableArray *selectedPhotos;
+@property (strong, nonatomic) NSMutableArray *selectedVideos;
+@property (strong, nonatomic) NSMutableArray *cameraList;
+@property (strong, nonatomic) NSMutableArray *cameraPhotos;
+@property (strong, nonatomic) NSMutableArray *cameraVideos;
+@property (strong, nonatomic) NSMutableArray *endCameraList;
+@property (strong, nonatomic) NSMutableArray *endCameraPhotos;
+@property (strong, nonatomic) NSMutableArray *endCameraVideos;
+@property (strong, nonatomic) NSMutableArray *selectedCameraList;
+@property (strong, nonatomic) NSMutableArray *selectedCameraPhotos;
+@property (strong, nonatomic) NSMutableArray *selectedCameraVideos;
+@property (strong, nonatomic) NSMutableArray *endSelectedCameraList;
+@property (strong, nonatomic) NSMutableArray *endSelectedCameraPhotos;
+@property (strong, nonatomic) NSMutableArray *endSelectedCameraVideos;
+@property (strong, nonatomic) NSMutableArray *endSelectedList;
+@property (strong, nonatomic) NSMutableArray *endSelectedPhotos;
+@property (strong, nonatomic) NSMutableArray *endSelectedVideos;
+//------//
+@property (assign, nonatomic) HXPhotoManagerSelectedType type;
+@property (assign, nonatomic) BOOL isOriginal;
+@property (assign, nonatomic) BOOL endIsOriginal;
+@property (copy, nonatomic) NSString *photosTotalBtyes;
+@property (copy, nonatomic) NSString *endPhotosTotalBtyes;
+
 
 /**
  HXPhotoManagerSelectedTypePhoto            // 只选择图片 - 默认类型

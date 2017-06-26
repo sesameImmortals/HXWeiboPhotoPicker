@@ -17,16 +17,24 @@
 // 代理返回 选择、移动顺序、删除之后的图片以及视频
 - (void)photoViewChangeComplete:(NSArray<HXPhotoModel *> *)allList Photos:(NSArray<HXPhotoModel *> *)photos Videos:(NSArray<HXPhotoModel *> *)videos Original:(BOOL)isOriginal;
 
+// 这次在相册选择的图片,不是所有选择的所有图片.
+//- (void)photoViewCurrentSelected:(NSArray<HXPhotoModel *> *)allList photos:(NSArray<HXPhotoModel *> *)photos videos:(NSArray<HXPhotoModel *> *)videos original:(BOOL)isOriginal;
+
 // 当view更新高度时调用
 - (void)photoViewUpdateFrame:(CGRect)frame WithView:(UIView *)view;
+
+// 删除网络图片的地址
+- (void)photoViewDeleteNetworkPhoto:(NSString *)networkPhotoUrl;
 
 @end
 
 @interface HXPhotoView : UIView
 
 @property (weak, nonatomic) id<HXPhotoViewDelegate> delegate;
+@property (strong, nonatomic) HXPhotoManager *manager;
 @property (strong, nonatomic) NSIndexPath *currentIndexPath; // 自定义转场动画时用到的属性
 - (instancetype)initWithFrame:(CGRect)frame WithManager:(HXPhotoManager *)manager;
 - (instancetype)initWithManager:(HXPhotoManager *)manager;
 + (instancetype)photoManager:(HXPhotoManager *)manager;
+- (void)goPhotoViewController;
 @end

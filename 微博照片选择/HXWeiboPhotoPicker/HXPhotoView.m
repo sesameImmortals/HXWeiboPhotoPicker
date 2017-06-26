@@ -14,20 +14,20 @@
 #import "HXVideoPreviewViewController.h"
 #import "HXCameraViewController.h"
 #import "UIView+HXExtension.h"
-
+#import "HXFullScreenCameraViewController.h"
 #define Spacing 3 // 每个item的间距
 #define LineNum 3 // 每行个数
-@interface HXPhotoView ()<HXCollectionViewDataSource,HXCollectionViewDelegate,HXPhotoViewControllerDelegate,HXPhotoSubViewCellDelegate,UIActionSheetDelegate,HXCameraViewControllerDelegate,UIAlertViewDelegate>
+@interface HXPhotoView ()<HXCollectionViewDataSource,HXCollectionViewDelegate,HXPhotoViewControllerDelegate,HXPhotoSubViewCellDelegate,UIActionSheetDelegate,HXCameraViewControllerDelegate,UIAlertViewDelegate,HXFullScreenCameraViewControllerDelegate>
 @property (strong, nonatomic) NSMutableArray *dataList;
 @property (strong, nonatomic) NSMutableArray *photos;
 @property (strong, nonatomic) NSMutableArray *videos;
-@property (strong, nonatomic) HXPhotoManager *manager;
 @property (weak, nonatomic) HXCollectionView *collectionView;
 @property (strong, nonatomic) HXPhotoModel *addModel;
 @property (assign, nonatomic) BOOL isAddModel;
 @property (assign, nonatomic) BOOL original;
 @property (strong, nonatomic) UICollectionViewFlowLayout *flowLayout;
 @property (assign, nonatomic) NSInteger numOfLinesOld;
+@property (strong, nonatomic) NSMutableArray *networkPhotos;
 @end
 
 @implementation HXPhotoView
@@ -52,9 +52,16 @@
     if (!_addModel) {
         _addModel = [[HXPhotoModel alloc] init];
         _addModel.type = HXPhotoModelMediaTypeCamera;
-        _addModel.thumbPhoto = [UIImage imageNamed:@"compose_pic_add@2x.png"];
+        _addModel.thumbPhoto = [HXPhotoTools hx_imageNamed:@"compose_pic_add@2x.png"];
     }
     return _addModel;
+}
+
+- (NSMutableArray *)networkPhotos {
+    if (!_networkPhotos) {
+        _networkPhotos = [NSMutableArray array];
+    }
+    return _networkPhotos;
 }
 
 + (instancetype)photoManager:(HXPhotoManager *)manager
@@ -99,12 +106,58 @@
     [collectionView registerClass:[HXPhotoSubViewCell class] forCellWithReuseIdentifier:@"cellId"];
     [self addSubview:collectionView];
     self.collectionView = collectionView;
-    
-    if (self.manager.endSelectedList.count > 0) {
+    if (self.manager.networkPhotoUrls.count) {
+        self.collectionView.editEnabled = NO;
+        [self.networkPhotos removeAllObjects];
+        for (int i = 0; i < self.manager.networkPhotoUrls.count ; i++) {
+            HXPhotoModel *model = [[HXPhotoModel alloc] init];
+            model.type = HXPhotoModelMediaTypeCameraPhoto;
+            model.networkPhotoUrl = self.manager.networkPhotoUrls[i];
+            model.cameraIdentifier = [self videoOutFutFileName];
+            model.imageSize = CGSizeMake([UIScreen mainScreen].bounds.size.width, [UIScreen mainScreen].bounds.size.width);
+            model.selected = YES;
+            model.thumbPhoto = [HXPhotoTools hx_imageNamed:@"qz_photolist_picture_fail@2x.png"];
+            model.previewPhoto = model.thumbPhoto;
+            [self.networkPhotos addObject:model];
+        }
+    }
+    if (self.manager.endSelectedList.count > 0 || self.networkPhotos.count > 0) {
         [self photoViewControllerDidNext:self.manager.endSelectedList.mutableCopy Photos:self.manager.endSelectedPhotos.mutableCopy Videos:self.manager.endSelectedVideos.mutableCopy Original:self.manager.endIsOriginal];
     }
 }
 
+- (void)setManager:(HXPhotoManager *)manager {
+    _manager = manager;
+    [self.networkPhotos removeAllObjects];
+    if (self.manager.networkPhotoUrls.count) {
+        self.collectionView.editEnabled = NO;
+        for (int i = 0; i < self.manager.networkPhotoUrls.count ; i++) {
+            HXPhotoModel *model = [[HXPhotoModel alloc] init];
+            model.type = HXPhotoModelMediaTypeCameraPhoto;
+            model.networkPhotoUrl = self.manager.networkPhotoUrls[i];
+            model.cameraIdentifier = [self videoOutFutFileName];
+            model.imageSize = CGSizeMake([UIScreen mainScreen].bounds.size.width, [UIScreen mainScreen].bounds.size.width);
+            model.selected = YES;
+            model.thumbPhoto = [HXPhotoTools hx_imageNamed:@"qz_photolist_picture_fail@2x.png"];
+            model.previewPhoto = model.thumbPhoto;
+            [self.networkPhotos addObject:model];
+        }
+    }
+    if (self.manager.endSelectedList.count > 0 || self.networkPhotos.count > 0) {
+        [self photoViewControllerDidNext:self.manager.endSelectedList.mutableCopy Photos:self.manager.endSelectedPhotos.mutableCopy Videos:self.manager.endSelectedVideos.mutableCopy Original:self.manager.endIsOriginal];
+    }
+}
+
+- (NSString *)videoOutFutFileName
+{
+    NSString *fileName = @"";
+    NSDate *nowDate = [NSDate date];
+    NSString *dateStr = [NSString stringWithFormat:@"%ld", (long)[nowDate timeIntervalSince1970]];
+    NSString *numStr = [NSString stringWithFormat:@"%d",arc4random()%10000];
+    fileName = [fileName stringByAppendingString:dateStr];
+    fileName = [fileName stringByAppendingString:numStr];
+    return fileName;
+}
 - (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section
 {
     return self.dataList.count;
@@ -115,6 +168,7 @@
     HXPhotoSubViewCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:@"cellId" forIndexPath:indexPath];
     cell.model = self.dataList[indexPath.item];
     cell.delegate = self;
+    cell.showDeleteNetworkPhotoAlert = self.manager.showDeleteNetworkPhotoAlert;
     return cell;
 }
 
@@ -122,6 +176,16 @@
 {
     self.currentIndexPath = indexPath;
     HXPhotoModel *model = self.dataList[indexPath.item];
+    if (model.networkPhotoUrl.length > 0) {
+        if (!model.downloadComplete) {
+            [[self viewController:self].view showImageHUDText:@"照片正在下载"];
+            return;
+        }else if (model.downloadError) {
+            HXPhotoSubViewCell *cell = (HXPhotoSubViewCell *)[self.collectionView cellForItemAtIndexPath:indexPath];
+            [cell againDownload];
+            return;
+        }
+    }
     if (model.type == HXPhotoModelMediaTypeCamera) {
         [self goPhotoViewController];
     }else if ((model.type == HXPhotoModelMediaTypePhoto || model.type == HXPhotoModelMediaTypePhotoGif) || (model.type == HXPhotoModelMediaTypeCameraPhoto || model.type == HXPhotoModelMediaTypeLivePhoto)) {
@@ -157,6 +221,18 @@
 {
     if (self.manager.outerCamera) {
         self.manager.openCamera = NO;
+        if (self.manager.networkPhotoUrls.count == 0) {
+            if (self.manager.type == HXPhotoManagerSelectedTypePhoto) {
+                self.manager.maxNum = self.manager.photoMaxNum;
+            }else if (self.manager.type == HXPhotoManagerSelectedTypeVideo) {
+                self.manager.maxNum = self.manager.videoMaxNum;
+            }else {
+                // 防错
+                if (self.manager.videoMaxNum + self.manager.photoMaxNum != self.manager.maxNum) {
+                    self.manager.maxNum = self.manager.videoMaxNum + self.manager.photoMaxNum;
+                }
+            }
+        }
         UIActionSheet *sheet = [[UIActionSheet alloc] initWithTitle:nil delegate:self cancelButtonTitle:@"取消" destructiveButtonTitle:nil otherButtonTitles:@"相机",@"相册", nil];
         
         [sheet showInView:self];
@@ -181,33 +257,42 @@
             [alert show];
             return;
         }
-        HXCameraViewController *vc = [[HXCameraViewController alloc] init];
-        vc.delegate = self;
+        HXCameraType type = 0;
         if (self.manager.type == HXPhotoManagerSelectedTypePhotoAndVideo) {
-            if (self.videos.count >= self.manager.videoMaxNum && self.photos.count < self.manager.photoMaxNum) {
-                vc.type = HXCameraTypePhoto;
-            }else if (self.photos.count >= self.manager.photoMaxNum && self.videos.count < self.manager.videoMaxNum) {
-                vc.type = HXCameraTypeVideo;
-            }else if (self.photos.count + self.videos.count >= self.manager.maxNum) {
+            if (self.videos.count >= self.manager.videoMaxNum && self.photos.count < self.manager.photoMaxNum + self.networkPhotos.count) {
+                type = HXCameraTypePhoto;
+            }else if (self.photos.count >= self.manager.photoMaxNum + self.networkPhotos.count && self.videos.count < self.manager.videoMaxNum) {
+                type = HXCameraTypeVideo;
+            }else if (self.photos.count + self.videos.count >= self.manager.maxNum + self.networkPhotos.count) {
                 [[self viewController:self].view showImageHUDText:@"已达最大数!"];
                 return;
             }else {
-                vc.type = HXCameraTypePhotoAndVideo;
+                type = HXCameraTypePhotoAndVideo;
             }
         }else if (self.manager.type == HXPhotoManagerSelectedTypePhoto) {
-            if (self.photos.count >= self.manager.photoMaxNum) {
+            if (self.photos.count >= self.manager.photoMaxNum + self.networkPhotos.count) {
                 [[self viewController:self].view showImageHUDText:@"照片已达最大数"];
                 return;
             }
-            vc.type = HXCameraTypePhoto;
+            type = HXCameraTypePhoto;
         }else if (self.manager.type == HXPhotoManagerSelectedTypeVideo) {
             if (self.videos.count >= self.manager.videoMaxNum) {
                 [[self viewController:self].view showImageHUDText:@"视频已达最大数!"];
                 return;
             }
-            vc.type = HXCameraTypeVideo;
+            type = HXCameraTypeVideo;
         }
-       [[self viewController:self] presentViewController:vc animated:YES completion:nil];
+        if (self.manager.showFullScreenCamera) {
+            HXFullScreenCameraViewController *vc1 = [[HXFullScreenCameraViewController alloc] init];
+            vc1.delegate = self;
+            vc1.type = type;
+            [[self viewController:self] presentViewController:vc1 animated:YES completion:nil];
+        }else {
+            HXCameraViewController *vc = [[HXCameraViewController alloc] init];
+            vc.delegate = self;
+            vc.type = type;
+            [[self viewController:self] presentViewController:vc animated:YES completion:nil];
+        }
     }else if (buttonIndex == 1){
         HXPhotoViewController *vc = [[HXPhotoViewController alloc] init];
         vc.manager = self.manager;
@@ -221,6 +306,9 @@
     if (buttonIndex == 1) {
         [[UIApplication sharedApplication] openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString]];
     }
+}
+- (void)fullScreenCameraDidNextClick:(HXPhotoModel *)model {
+    [self cameraDidNextClick:model];
 }
 
 - (void)cameraDidNextClick:(HXPhotoModel *)model
@@ -316,7 +404,18 @@
     NSIndexPath *indexPath = [self.collectionView indexPathForCell:cell];
     HXPhotoModel *model = self.dataList[indexPath.item];
     [self.manager deleteSpecifiedModel:model];
-    
+    if (model.networkPhotoUrl.length > 0) {
+        for (HXPhotoModel *netModel in self.networkPhotos) {
+            if ([netModel.networkPhotoUrl isEqualToString:model.networkPhotoUrl]) {
+                if ([self.delegate respondsToSelector:@selector(photoViewDeleteNetworkPhoto:)]) {
+                    [self.delegate photoViewDeleteNetworkPhoto:netModel.networkPhotoUrl];
+                }
+                self.manager.photoMaxNum += 1;
+                [self.networkPhotos removeObject:netModel];
+                break;
+            }
+        }
+    }
     if ((model.type == HXPhotoModelMediaTypePhoto || model.type == HXPhotoModelMediaTypePhotoGif) || (model.type == HXPhotoModelMediaTypeCameraPhoto || model.type == HXPhotoModelMediaTypeLivePhoto)) {
         [self.photos removeObject:model];
     }else if (model.type == HXPhotoModelMediaTypeVideo || model.type == HXPhotoModelMediaTypeCameraVideo) {
@@ -327,7 +426,6 @@
     model.imageData = nil;
     model.livePhoto = nil;
     model = nil;
-    [self changeSelectedListModelIndex];
     
     UIView *mirrorView = [cell snapshotViewAfterScreenUpdates:NO];
     mirrorView.frame = cell.frame;
@@ -341,6 +439,7 @@
     }];
     [self.dataList removeObjectAtIndex:indexPath.item];
     [self.collectionView deleteItemsAtIndexPaths:@[indexPath]];
+    [self changeSelectedListModelIndex];
     if (self.isAddModel) {
         if ([self.delegate respondsToSelector:@selector(photoViewChangeComplete:Photos:Videos:Original:)]) {
             [self.delegate photoViewChangeComplete:self.dataList.mutableCopy Photos:self.photos.mutableCopy Videos:self.videos.mutableCopy Original:self.original];
@@ -361,7 +460,14 @@
 - (void)changeSelectedListModelIndex
 {
     int i = 0, j = 0, k = 0;
-    for (HXPhotoModel *model in self.manager.endSelectedList) {
+    NSMutableArray *array;
+    if (self.isAddModel) {
+        array = self.dataList;
+    }else {
+        array = self.dataList.mutableCopy;
+        [array removeLastObject];
+    }
+    for (HXPhotoModel *model in array) {
         if ((model.type == HXPhotoModelMediaTypePhoto || model.type == HXPhotoModelMediaTypePhotoGif) || (model.type == HXPhotoModelMediaTypeCameraPhoto || model.type == HXPhotoModelMediaTypeLivePhoto)) {
             model.endIndex = i++;
         }else if (model.type == HXPhotoModelMediaTypeVideo || model.type == HXPhotoModelMediaTypeCameraVideo) {
@@ -373,13 +479,28 @@
 
 - (void)photoViewControllerDidNext:(NSArray<HXPhotoModel *> *)allList Photos:(NSArray<HXPhotoModel *> *)photos Videos:(NSArray<HXPhotoModel *> *)videos Original:(BOOL)original
 {
+//    if ([self.delegate respondsToSelector:@selector(photoViewCurrentSelected:photos:videos:original:)]) {
+//        [self.delegate photoViewCurrentSelected:allList photos:photos videos:videos original:original];
+//    }
     self.original = original;
+    NSMutableArray *tempAllArray = [NSMutableArray array];
+    NSMutableArray *tempPhotoArray = [NSMutableArray array];
+    for (HXPhotoModel *model in self.networkPhotos) {
+        [tempAllArray addObject:model];
+        [tempPhotoArray addObject:model];
+    }
+    [tempAllArray addObjectsFromArray:allList];
+    [tempPhotoArray addObjectsFromArray:photos];
+    allList = tempAllArray;
+    photos = tempPhotoArray;
+    
     self.photos = [NSMutableArray arrayWithArray:photos];
     self.videos = [NSMutableArray arrayWithArray:videos];
     [self.dataList removeAllObjects];
 //    if (self.manager.separate) {
 //        [self.dataList addObjectsFromArray:photos];
 //    }else {
+
         [self.dataList addObjectsFromArray:allList];
 //    }
     [self.dataList addObject:self.addModel];
@@ -389,13 +510,32 @@
             self.isAddModel = YES;
         }
     }else {
-        if (photos.count == self.manager.photoMaxNum) {
-            [self.dataList removeLastObject];
-            self.isAddModel = YES;
-        }else if (videos.count == self.manager.videoMaxNum) {
-            [self.dataList removeLastObject];
-            self.isAddModel = YES;
+        if (photos.count > 0) {
+            if (photos.count == self.manager.photoMaxNum + self.networkPhotos.count) {
+                if (self.manager.photoMaxNum > 0 || self.networkPhotos.count > 0) {
+                    [self.dataList removeLastObject];
+                    self.isAddModel = YES;
+                }
+            }
+        }else if (videos.count > 0) {
+            if (videos.count == self.manager.videoMaxNum) {
+                if (self.manager.videoMaxNum > 0) {
+                    [self.dataList removeLastObject];
+                    self.isAddModel = YES;
+                }
+            }
         }
+//        if (photos.count == self.manager.photoMaxNum + self.networkPhotos.count) {
+//            if (self.manager.photoMaxNum > 0 || self.networkPhotos.count > 0) {
+//                [self.dataList removeLastObject];
+//                self.isAddModel = YES;
+//            }
+//        }else if (videos.count == self.manager.videoMaxNum) {
+//            if (self.manager.videoMaxNum > 0) {
+//                [self.dataList removeLastObject];
+//                self.isAddModel = YES;
+//            }
+//        }
     }
     [self changeSelectedListModelIndex];
     [self.collectionView reloadData];
@@ -492,6 +632,9 @@
         CGFloat newHeight = numOfLinesNew * itemW + Spacing * (numOfLinesNew - 1);
         self.frame = CGRectMake(x, y, width, newHeight);
         self.numOfLinesOld = numOfLinesNew;
+        if (newHeight <= 0) {
+            self.numOfLinesOld = 0;
+        }
         if ([self.delegate respondsToSelector:@selector(photoViewUpdateFrame:WithView:)]) {
             [self.delegate photoViewUpdateFrame:self.frame WithView:self];
         }
@@ -522,6 +665,10 @@
     CGFloat cWidth = self.frame.size.width;
     CGFloat cHeight = self.frame.size.height;
     self.collectionView.frame = CGRectMake(0, 0, cWidth, cHeight);
+}
+- (void)dealloc {
+    [[SDWebImageManager sharedManager] cancelAll];
+    NSLog(@"dealloc");
 }
 
 @end

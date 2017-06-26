@@ -18,6 +18,7 @@
 {
     self = [super initWithFrame:frame];
     if (self) {
+        self.currentIndex = 0;
         [self setup];
     }
     return self;
@@ -42,7 +43,7 @@
     _list = list;
     
     [self.tableView reloadData];
-    [self.tableView selectRowAtIndexPath:[NSIndexPath indexPathForRow:0 inSection:0] animated:NO scrollPosition:UITableViewScrollPositionNone];
+    [self.tableView selectRowAtIndexPath:[NSIndexPath indexPathForRow:self.currentIndex inSection:0] animated:NO scrollPosition:UITableViewScrollPositionNone];
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
@@ -64,6 +65,7 @@
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
 {
+    self.currentIndex = indexPath.row;
     if ([self.delegate respondsToSelector:@selector(didTableViewCellClick:animate:)]) {
         [self.delegate didTableViewCellClick:self.list[indexPath.row] animate:YES];
     }
@@ -109,7 +111,7 @@
     [self.contentView addSubview:photoNum];
     self.photoNum = photoNum;
     
-    UIImageView *numIcon = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"compose_photo_filter_checkbox_checked@2x.png"]];
+    UIImageView *numIcon = [[UIImageView alloc] initWithImage:[HXPhotoTools hx_imageNamed:@"compose_photo_filter_checkbox_checked@2x.png"]];
     [photoView addSubview:numIcon];
     self.numIcon = numIcon;
 }
@@ -119,9 +121,12 @@
     _model = model;
     
     __weak typeof(self) weakSelf = self;
-    [HXPhotoTools FetchPhotoForPHAsset:model.asset Size:CGSizeMake(60, 60) resizeMode:PHImageRequestOptionsResizeModeFast completion:^(UIImage *image, NSDictionary *info) {
+    if (!model.asset) {
+        model.asset = model.result.lastObject;
+    }
+    [HXPhotoTools getPhotoForPHAsset:model.asset size:CGSizeMake(60, 60) completion:^(UIImage *image, NSDictionary *info) {
         weakSelf.photoView.image = image;
-    }];
+    }]; 
     
     self.photoName.text = model.albumName;
     self.photoNum.text = [NSString stringWithFormat:@"%ld",model.count];

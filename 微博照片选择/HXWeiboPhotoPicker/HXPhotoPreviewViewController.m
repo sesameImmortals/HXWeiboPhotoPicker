@@ -40,6 +40,12 @@
 
 - (void)setup
 {
+    if (self.isPreview) {
+        // 防错,,,,,如果出现问题麻烦及时告诉我.....
+        for (HXPhotoModel *model in self.modelList) {
+            model.selected = YES;
+        }
+    }
     self.automaticallyAdjustsScrollViewInsets = NO;
     self.navigationItem.titleView = self.titleLb;
     self.view.backgroundColor = [UIColor whiteColor];
@@ -146,7 +152,9 @@
     }else if (model.type == HXPhotoModelMediaTypePhotoGif) {
         [cell startGifImage];
     }else {
-        [cell fetchLongPhoto];
+        if (!model.previewPhoto) {
+            [cell fetchLongPhoto];
+        }
     }
 }
 
@@ -167,8 +175,8 @@
     if (!_selectedBtn) {
         CGFloat width = self.view.frame.size.width;
         _selectedBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-        [_selectedBtn setImage:[UIImage imageNamed:@"compose_guide_check_box_default@2x.png"] forState:UIControlStateNormal];
-        [_selectedBtn setImage:[UIImage imageNamed:@"compose_guide_check_box_right@2x.png"] forState:UIControlStateSelected];
+        [_selectedBtn setImage:[HXPhotoTools hx_imageNamed:@"compose_guide_check_box_default@2x.png"] forState:UIControlStateNormal];
+        [_selectedBtn setImage:[HXPhotoTools hx_imageNamed:@"compose_guide_check_box_right@2x.png"] forState:UIControlStateSelected];
         CGFloat selectedBtnW = _selectedBtn.currentImage.size.width;
         CGFloat selectedBtnH = _selectedBtn.currentImage.size.height;
         _selectedBtn.frame = CGRectMake(width - 30 - selectedBtnW, 84, selectedBtnW, selectedBtnH);
@@ -224,6 +232,11 @@
                 return;
             }
         }
+        HXPhotoPreviewViewCell *cell = (HXPhotoPreviewViewCell *)[self.collectionView cellForItemAtIndexPath:[NSIndexPath indexPathForItem:self.index inSection:0]];
+        if (model.type != HXPhotoModelMediaTypeCameraVideo && model.type != HXPhotoModelMediaTypeCameraPhoto) {
+            model.thumbPhoto = cell.imageView.image;
+            model.previewPhoto = cell.imageView.image;
+        }
         if (model.type == HXPhotoModelMediaTypePhoto || (model.type == HXPhotoModelMediaTypePhotoGif || model.type == HXPhotoModelMediaTypeLivePhoto)) {
             [self.manager.selectedPhotos addObject:model];
         }else if (model.type == HXPhotoModelMediaTypeVideo) {
@@ -243,6 +256,10 @@
         anim.values = @[@(1.2),@(0.8),@(1.1),@(0.9),@(1.0)];
         [button.layer addAnimation:anim forKey:@""];
     }else {
+        if (model.type != HXPhotoModelMediaTypeCameraVideo && model.type != HXPhotoModelMediaTypeCameraPhoto) {
+            model.thumbPhoto = nil;
+            model.previewPhoto = nil;
+        }
         int i = 0;
         for (HXPhotoModel *subModel in self.manager.selectedList) {
             if ([subModel.asset.localIdentifier isEqualToString:model.asset.localIdentifier]) {
@@ -293,8 +310,7 @@
     }
 }
 
-- (UIButton *)rightBtn
-{
+- (UIButton *)rightBtn {
     if (!_rightBtn) {
         _rightBtn = [UIButton buttonWithType:UIButtonTypeCustom];
         [_rightBtn setTitle:@"下一步" forState:UIControlStateNormal];
@@ -342,10 +358,17 @@
             max = YES;
         }
     }
-    if (!self.selectedBtn.selected && !max) {
-        model.selected = YES;
-        [self.manager.selectedList addObject:model];
-        [self.manager.selectedPhotos addObject:model];
+    if (!self.isPreview) {
+        if (self.manager.selectedList.count == 0) {
+            if (!self.selectedBtn.selected && !max) {
+                model.selected = YES;
+                HXPhotoPreviewViewCell *cell = (HXPhotoPreviewViewCell *)[self.collectionView cellForItemAtIndexPath:[NSIndexPath indexPathForItem:self.index inSection:0]];
+                model.thumbPhoto = cell.imageView.image;
+                model.previewPhoto = cell.imageView.image;
+                [self.manager.selectedList addObject:model];
+                [self.manager.selectedPhotos addObject:model];
+            }
+        }
     }
     if ([self.delegate respondsToSelector:@selector(previewDidNextClick)]) {
         [self.delegate previewDidNextClick];

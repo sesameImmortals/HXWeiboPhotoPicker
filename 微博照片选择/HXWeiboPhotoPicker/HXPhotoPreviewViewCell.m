@@ -9,6 +9,7 @@
 #import "HXPhotoPreviewViewCell.h"
 #import "HXPhotoTools.h"
 #import "UIImage+HXExtension.h"
+#import "HXCircleProgressView.h"
 @interface HXPhotoPreviewViewCell ()<UIScrollViewDelegate,PHLivePhotoViewDelegate>
 @property (weak, nonatomic) UIScrollView *scrollView;
 @property (weak, nonatomic) UIImageView *imageView;
@@ -17,6 +18,10 @@
 @property (strong, nonatomic) UIImage *gifImage;
 @property (assign, nonatomic) PHImageRequestID requestID;
 @property (assign, nonatomic) PHImageRequestID longRequestId;
+@property (strong, nonatomic) HXCircleProgressView *progressView;
+@property (assign, nonatomic) PHImageRequestID liveRequestID;
+@property (weak, nonatomic) UIImage *firstImage;
+
 @end
 
 @implementation HXPhotoPreviewViewCell
@@ -86,24 +91,27 @@
     self.livePhotoView.frame = self.imageView.frame;
     self.livePhotoView.delegate = self;
     [self.scrollView addSubview:self.livePhotoView];
-    if (self.model.livePhoto) {
-        self.livePhotoView.livePhoto = self.model.livePhoto;
-        [self.livePhotoView startPlaybackWithStyle:PHLivePhotoViewPlaybackStyleFull];
-    }else {
+//    if (self.model.livePhoto) {
+//        self.livePhotoView.livePhoto = self.model.livePhoto;
+//        [self.livePhotoView startPlaybackWithStyle:PHLivePhotoViewPlaybackStyleFull];
+//    }else {
         __weak typeof(self) weakSelf = self;
-        [HXPhotoTools FetchLivePhotoForPHAsset:self.model.asset Size:CGSizeMake(self.model.endImageSize.width * 2, self.model.endImageSize.height * 2) Completion:^(PHLivePhoto *livePhoto, NSDictionary *info) {
-            weakSelf.model.livePhoto = livePhoto;
+        self.liveRequestID = [HXPhotoTools FetchLivePhotoForPHAsset:self.model.asset Size:CGSizeMake(self.model.endImageSize.width * 2, self.model.endImageSize.height * 2) Completion:^(PHLivePhoto *livePhoto, NSDictionary *info) {
+//            weakSelf.model.livePhoto = livePhoto;
             weakSelf.livePhotoView.livePhoto = livePhoto;
             [weakSelf.livePhotoView startPlaybackWithStyle:PHLivePhotoViewPlaybackStyleFull];
         }];
-    }
+//    }
 }
 
 - (void)stopLivePhoto
 {
+    [[PHImageManager defaultManager] cancelImageRequest:self.liveRequestID];
     self.isAnimating = NO;
     [self.livePhotoView stopPlayback];
     [self.livePhotoView removeFromSuperview];
+    self.livePhotoView.delegate = nil;
+    self.livePhotoView = nil;
 }
 
 - (void)fetchLongPhoto
@@ -118,14 +126,18 @@
     if (imgHeight > imgWidth / 9 * 17) {
         requestID = [HXPhotoTools FetchPhotoForPHAsset:self.model.asset Size:CGSizeMake(width, height) deliveryMode:PHImageRequestOptionsDeliveryModeHighQualityFormat completion:^(UIImage *image, NSDictionary *info) {
             weakSelf.imageView.image = image;
-        } error:^(NSDictionary *info) {
-            weakSelf.imageView.image = weakSelf.model.thumbPhoto;
+            weakSelf.progressView.hidden = YES;
+        } progressHandler:^(double progress, NSError *error, BOOL *stop, NSDictionary *info) {
+            weakSelf.progressView.hidden = NO;
+            weakSelf.progressView.progress = progress;
         }];
     }else {
         requestID = [HXPhotoTools FetchPhotoForPHAsset:self.model.asset Size:CGSizeMake(_model.endImageSize.width * 2, _model.endImageSize.height * 2) deliveryMode:PHImageRequestOptionsDeliveryModeHighQualityFormat completion:^(UIImage *image, NSDictionary *info) {
             weakSelf.imageView.image = image;
-        } error:^(NSDictionary *info) {
-            weakSelf.imageView.image = weakSelf.model.thumbPhoto;
+            weakSelf.progressView.hidden = YES;
+        } progressHandler:^(double progress, NSError *error, BOOL *stop, NSDictionary *info) {
+            weakSelf.progressView.hidden = NO;
+            weakSelf.progressView.progress = progress;
         }];
     }
     if (self.longRequestId != requestID) {
@@ -141,11 +153,7 @@
 
 - (void)stopGifImage
 {
-    if (self.model.previewPhoto) {
-        self.imageView.image = self.model.previewPhoto;
-    }else {
-        self.imageView.image = self.model.thumbPhoto;
-    }
+    self.imageView.image = self.firstImage;
 }
 
 - (void)setModel:(HXPhotoModel *)model
@@ -175,38 +183,41 @@
     _imageView.center = CGPointMake(width / 2, height / 2);
     if (model.type == HXPhotoModelMediaTypePhotoGif) {
         __weak typeof(self) weakSelf = self;
-            [HXPhotoTools FetchPhotoDataForPHAsset:model.asset completion:^(NSData *imageData, NSDictionary *info) {
-                __strong typeof(weakSelf) strongSelf = weakSelf;
-                UIImage *gifImage = [UIImage animatedGIFWithData:imageData];
-                if (gifImage.images.count == 0) {
-                    weakSelf.imageView.image = gifImage;
-                }else {
-                    weakSelf.imageView.image = gifImage.images.firstObject;
-                }
-                strongSelf.gifImage = gifImage;
-            }];
-    }else {
-        //if (model.previewPhoto) {
-            //self.imageView.image = model.previewPhoto;
-        //}else {
-            __weak typeof(self) weakSelf = self;
-        PHImageRequestID requestID;
-            if (imgHeight > imgWidth / 9 * 17) {
-                requestID = [HXPhotoTools FetchPhotoForPHAsset:model.asset Size:CGSizeMake(width / 2, height / 2) resizeMode:PHImageRequestOptionsResizeModeFast completion:^(UIImage *image, NSDictionary *info) {
-                    //model.previewPhoto = image;
-                    weakSelf.imageView.image = image;
-                }];
+        [HXPhotoTools FetchPhotoDataForPHAsset:model.asset completion:^(NSData *imageData, NSDictionary *info) { 
+            UIImage *gifImage = [UIImage animatedGIFWithData:imageData];
+            if (gifImage.images.count == 0) {
+                weakSelf.firstImage = gifImage;
+                weakSelf.imageView.image = gifImage;
             }else {
-                requestID = [HXPhotoTools FetchPhotoForPHAsset:model.asset Size:CGSizeMake(model.endImageSize.width, model.endImageSize.height) resizeMode:PHImageRequestOptionsResizeModeFast completion:^(UIImage *image, NSDictionary *info) {
-                    //model.previewPhoto = image;
-                    weakSelf.imageView.image = image;
-                }];
+                weakSelf.firstImage = gifImage.images.firstObject;
+                weakSelf.imageView.image = gifImage.images.firstObject;
             }
-        if (self.requestID != requestID) {
-            [[PHImageManager defaultManager] cancelImageRequest:self.requestID];
+            weakSelf.gifImage = gifImage;
+        }];
+    }else {
+        if (model.type == HXPhotoModelMediaTypeCameraPhoto) {
+            self.imageView.image = model.thumbPhoto;
+        }else {
+            if (model.previewPhoto) {
+                self.imageView.image = model.previewPhoto;
+            }else {
+                __weak typeof(self) weakSelf = self;
+                PHImageRequestID requestID;
+                if (imgHeight > imgWidth / 9 * 17) {
+                    requestID = [HXPhotoTools getPhotoForPHAsset:model.asset size:CGSizeMake(width * 0.5, height * 0.5) completion:^(UIImage *image, NSDictionary *info) {
+                        weakSelf.imageView.image = image;
+                    }]; 
+                }else {
+                    requestID = [HXPhotoTools getPhotoForPHAsset:model.asset size:CGSizeMake(model.endImageSize.width * 0.8, model.endImageSize.height * 0.8) completion:^(UIImage *image, NSDictionary *info) {
+                        weakSelf.imageView.image = image;
+                    }];
+                }
+                if (self.requestID != requestID) {
+                    [[PHImageManager defaultManager] cancelImageRequest:self.requestID];
+                }
+                self.requestID = requestID;
+            }
         }
-        self.requestID = requestID;
-        //}
     }
 }
 
@@ -259,5 +270,12 @@
     _imageView.frame = CGRectMake(0, 0, w, h);
     _imageView.center = CGPointMake(width / 2, height / 2);
     _imageCenter = _imageView.center;
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGFloat width = self.frame.size.width;
+    CGFloat height = self.frame.size.height;
+    self.progressView.center = CGPointMake(width / 2, height / 2);
+    
 }
 @end

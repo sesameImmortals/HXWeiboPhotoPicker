@@ -7,6 +7,7 @@
 //
 
 #import <UIKit/UIKit.h>
+#import "UIImageView+WebCache.h"
 
 @protocol HXPhotoSubViewCellDelegate <NSObject>
 
@@ -19,4 +20,10 @@
 @property (weak, nonatomic) id<HXPhotoSubViewCellDelegate> delegate;
 @property (weak, nonatomic, readonly) UIImageView *imageView;
 @property (strong, nonatomic) HXPhotoModel *model;
+/**
+ 删除网络图片时是否显示Alert // 默认显示
+ */
+@property (assign, nonatomic) BOOL showDeleteNetworkPhotoAlert;
+// 重新下载
+- (void)againDownload;
 @end
